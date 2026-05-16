@@ -1,135 +1,93 @@
+import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
-function App() {
-  const [students, setStudents] = useState([])
-  const [loading, setLoading] = useState(true)
+import Dashboard from './Pages/Dashboard'
+import Students from './Pages/Students'
+import Teachers from './Pages/Teachers'
+import Login from './Pages/Login'
 
-  // Form state.
-  const [name, setName] = useState('')
-  const [roll, setRoll] = useState('')
-  const [className, setClassName] = useState('KG-1')
-  const [saving, setSaving] = useState(false)
+const navItems = [
+  { path: '/',         label: 'Home' },
+  { path: '/students', label: 'Students' },
+  { path: '/teachers', label: 'Teachers' },
+]
 
-  // Load students on page open
-  useEffect(() => {
-    loadStudents()
-  }, [])
-
-  async function loadStudents() {
-    const { data, error} = await supabase
-      .from('students')
-      .select('*')
-      .eq('academic_year', 2025)
-      .order('roll_number', {ascending: true})
-    
-    if (error) console.error(error)
-    else setStudents(data)
-    setLoading(false)
-  }
-
-  // This runs when the form is submitted
-  async function addStudent() {
-    // Basic validation - don't save empty data
-    if (!name || !roll) {
-      alert('Please fill in name and roll number')
-      return
-    }
-
-    setSaving(true)
-
-    const {error} = await supabase.from('students').insert({
-      name: name,
-      roll_number: parseInt(roll), // convert text to roll_number
-      class: className,
-      academic_year: 2025
-    })
-
-    if(error) {
-      console.error(error)
-      alert('Error saving student')
-    } else {
-      // Clear the form
-      setName('')
-      setRoll('')
-      // Reload the list so the new student appears
-      await loadStudents()
-    }
-
-    setSaving(false)
+function Layout({ children }) {
+  async function handleLogout() {
+    await supabase.auth.signOut()
   }
 
   return (
-    <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto'}}>
-      <h1>School System</h1>
-
-      {/* Add Student Form*/}
-      <div style={{ background: '#f0f0f0', padding: '16px', borderRadius: '8px', marginBottom: '24px' }}>
-        <h1>Add Student</h1>
-
-        <div style={{ marginBottom: '8px'}}>
-          <label>Name: </label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Student full name"
-            style={{ marginLeft: '8px', padding: '4px' }}
-            />
-        </div>
-
-        <div style={{ marginBottom: '8px'}}>
-          <label>Roll Number: </label>
-          <input
-            value={roll}
-            onChange={(e) => setRoll(e.target.value)}
-            placeholder="Assigned roll number at the time of admission"
-            type="number"
-            style={{ marginLeft: '8px', padding: '4px' }}
-            />
-        </div>
-
-        <div style={{ marginBottom: '16px'}}>
-          <label>Class: </label>
-          <select
-            value={className}
-            onChange={(e) => setClassName(e.target.value)}
-            style={{ marginLeft: '8px', padding: '4px' }}
-          >
-            <option value="KG-1">KG-1</option>
-            <option value="KG-2">KG-2</option>
-            <option value="KG-3">KG-3</option>
-          </select>
-          
-        </div>
-
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-blue-700 text-white p-4 shadow flex justify-between items-center">
+        <h1 className="text-lg font-bold">📚 School System</h1>
         <button
-          onClick={addStudent}
-          disabled={saving}
-          style={{ padding: '8px 16px', cursor: 'pointer' }}
+          onClick={handleLogout}
+          className="text-sm bg-blue-800 px-3 py-1 rounded"
         >
-          {saving ? 'Saving...' : 'Add Student'}
+          Logout
         </button>
-      </div>
+      </header>
 
-      {/* Student List*/}
-      <h2>Students ({students.length})</h2>
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        students.map(student => {
-          <div key={student.id} style={{
-            padding: '12px',
-            borderBottom: '1px solid #ddd',
-            display: 'flex',
-            justifyContent: 'space-between'
-          }}>
-            <strong>{student.name}</strong>
-            <span>Roll {student.roll_number}</span>
-            <span>{student.class}</span>
-          </div>})
-      )}
+      <main className="p-4 max-w-2xl mx-auto pb-24">
+        {children}
+      </main>
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t shadow flex justify-around">
+        {navItems.map(item => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            end
+            className={({ isActive }) =>
+              `flex-1 text-center py-3 text-sm font-medium transition-colors
+              ${isActive ? 'text-blue-700 border-t-2 border-blue-700' : 'text-gray-500'}`
+            }
+          >
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
     </div>
   )
 }
 
-export default App
+export default function App() {
+  const [session, setSession] = useState(null)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    // Check if someone is already logged in
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setChecking(false)
+    })
+
+    // Listen for login and logout events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session)
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // Still checking if logged in
+  if (checking) return <p className="p-4">Loading...</p>
+
+  // Not logged in — show login page
+  if (!session) return <Login />
+
+  // Logged in — show the app
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout><Dashboard /></Layout>} />
+        <Route path="/students" element={<Layout><Students /></Layout>} />
+        <Route path="/teachers" element={<Layout><Teachers /></Layout>} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
