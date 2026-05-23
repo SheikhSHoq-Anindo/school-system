@@ -22,4 +22,10 @@ export default function Teachers() {
         else setTeachers(data)
         setLoading(false)
     }
+
+    async function addTeachers() {
+        if (!name || !roll) {
+            alert('Please fill in the name and other informations')
+        }
+    }
 }
